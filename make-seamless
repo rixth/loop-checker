@@ -1,0 +1,9 @@
+#!/bin/bash
+
+ffmpeg -i "$1" -acodec libfaac -vcodec libx264 -profile main -crf 16 -force_key_frames "expr:between(t,0.0,0.1)" -bf 0 out.mp4
+remuxer --dash --fragment 1 -i out.mp4 -o dashed.mp4
+duration=$(ffprobe "$1" 2>&1 | egrep --color=no --only-match "Duration: \d\d:\d\d:(\d\d.\d\d)" | cut -c17-)
+rm out.mp4
+sed -e "s/duration = \(.*\);/duration = parseFloat('$duration');/" index.html > new-index.html
+rm index.html
+mv new-index.html index.html

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Document</title>
+</head>
+<body>
+<video width="500" height="500">
+<script>
+window.MediaSource = window.MediaSource || window.WebKitMediaSource;
+
+var duration = parseFloat('03.10');
+
+var CUT_OFF = 0.05,
+    NUM_COPIES = 25,
+    file = 'dashed.mp4',
+    client = new window.XMLHttpRequest(),
+    mediaElement = document.getElementsByTagName('video')[0],
+    sourceBuffer;
+
+client.addEventListener('error', function (error) {
+  console.error('xhr error');
+}.bind(this));
+
+client.onload = function () {
+  var mediaSource = new window.MediaSource();
+  mediaElement.src = window.URL.createObjectURL(mediaSource);
+
+  var buffer = new Uint8Array(client.response);
+
+  mediaSource.addEventListener('sourceopen', function () {
+    try {
+      sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.4d401e, mp4a.40.2"');
+    } catch (e) {
+      return console.error('sourcebuffer error');
+    }
+
+    var updateendQueue = [];
+
+    function addCopy() {
+      var appendTime = sourceBuffer.buffered.length > 0 ? sourceBuffer.buffered.end(sourceBuffer.buffered.length - 1) : CUT_OFF;
+
+      sourceBuffer.timestampOffset = appendTime - CUT_OFF;
+
+      sourceBuffer.appendWindowEnd = appendTime + duration - 2 * CUT_OFF;
+      sourceBuffer.appendWindowStart = appendTime;
+
+      sourceBuffer.appendBuffer(buffer);
+    }
+
+    addCopy = addCopy.bind(this);
+
+    for (var i = 0; i < NUM_COPIES; i++) {
+      updateendQueue.push(function () {
+        try {
+          addCopy();
+        } catch (e) {
+          sourceBuffer.removeEventListener('updateend', updateendListener);
+        }
+      });
+    }
+
+    updateendQueue.push(function () {
+      mediaSource.endOfStream();
+      mediaElement.currentTime = CUT_OFF + 0.011;
+      mediaElement.play();
+    }.bind(this));
+
+    function updateendListener() {
+      if (updateendQueue.length) {
+        updateendQueue.shift()();
+      }
+    }
+
+    sourceBuffer.addEventListener('updateend', updateendListener);
+
+    updateendQueue.shift()();
+  }.bind(this));
+}.bind(this);
+
+client.open('GET', file, true);
+client.responseType = 'arraybuffer';
+client.send();
+</script>
+</body>
+</html>
